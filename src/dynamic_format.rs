@@ -14,6 +14,7 @@ use tracing_subscriber::{
 };
 
 pub struct DynamicFormatter {
+    dim_format: DimFormat,
     dim: Arc<AtomicBool>,
 }
 
@@ -29,8 +30,7 @@ where
         event: &Event<'_>,
     ) -> std::fmt::Result {
         if self.dim.load(Ordering::Relaxed) {
-            let dim = DimFormat::new();
-            dim.format_event(ctx, writer, event)
+            self.dim_format.format_event(ctx, writer, event)
         } else {
             let default = tracing_subscriber::fmt::format::Format::default();
             default.format_event(ctx, writer, event)
@@ -40,7 +40,8 @@ where
 
 impl DynamicFormatter {
     pub fn new(dim: Arc<AtomicBool>) -> Self {
-        Self { dim }
+        let dim_format = DimFormat::new();
+        Self { dim_format, dim }
     }
 }
 
