@@ -69,15 +69,15 @@ where
         mut writer: Writer<'_>,
         event: &Event<'_>,
     ) -> std::fmt::Result {
-        let meta = event.metadata();
+        if writer.has_ansi_escapes() {
+            write!(writer, "\x1b[2m")?;
+        }
+
         let system_time = SystemTime::now();
         let date_time: DateTime<Utc> = system_time.into();
-        write!(
-            writer,
-            "\x1b[2m{}  ",
-            date_time.format("%Y-%m-%dT%H:%M:%S%.6fZ")
-        )?;
+        write!(writer, "{}  ", date_time.format("%Y-%m-%dT%H:%M:%S%.6fZ"))?;
 
+        let meta = event.metadata();
         let fmt_level = match *meta.level() {
             tracing::Level::ERROR => "ERROR",
             tracing::Level::WARN => "WARN ",
