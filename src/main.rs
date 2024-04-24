@@ -1,6 +1,6 @@
 use std::{
     io::stdout,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicBool, Ordering},
     time::SystemTime,
 };
 
@@ -11,6 +11,7 @@ use tracing_subscriber::{
     fmt::{format::Writer, FmtContext, FormatEvent, FormatFields},
     layer::SubscriberExt,
     registry::LookupSpan,
+    util::SubscriberInitExt,
     EnvFilter, Layer,
 };
 
@@ -20,28 +21,22 @@ fn main() {
         .with(
             tracing_subscriber::fmt::Layer::default()
                 .with_ansi(stdout().is_tty())
-                .event_format(DynamicFormatter::new())
+                .event_format(DynamicFormatter)
                 .with_filter(filter),
         )
         .try_init();
     info!("NORMAL");
-    CURRENT_FORMATTER.store(1, Ordering::Relaxed);
+    DIM_FORMAT.store(true, Ordering::Relaxed);
     info!("DIM");
+    DIM_FORMAT.store(false, Ordering::Relaxed);
     info!("NORMAL");
 }
 
-static CURRENT_FORMATTER: AtomicUsize = AtomicUsize::new(0);
+static DIM_FORMAT: AtomicBool = AtomicBool::new(false);
 
-struct DynamicFormatter<S, N>
-where
-    S: Subscriber + for<'a> LookupSpan<'a>,
-    N: for<'a> FormatFields<'a> + 'static,
-{
-    default: Box<dyn FormatEvent<S, N>>,
-    dim: Box<dyn FormatEvent<S, N>>,
-}
+struct DynamicFormatter;
 
-impl<S, N> FormatEvent<S, N> for DynamicFormatter<S, N>
+impl<S, N> FormatEvent<S, N> for DynamicFormatter
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
     N: for<'a> FormatFields<'a> + 'static,
@@ -49,25 +44,16 @@ where
     fn format_event(
         &self,
         ctx: &FmtContext<'_, S, N>,
-        mut writer: Writer<'_>,
+        writer: Writer<'_>,
         event: &Event<'_>,
     ) -> std::fmt::Result {
-        match CURRENT_FORMATTER.load(Ordering::Relaxed) {
-            0 => self.default.format_event(ctx, writer, event),
-            _ => self.dim.format_event(ctx, writer, event),
+        let default = tracing_subscriber::fmt::format::Format::default();
+        let dim = MyFormat::new();
+        if DIM_FORMAT.load(Ordering::Relaxed) {
+            dim.format_event(ctx, writer, event)
+        } else {
+            default.format_event(ctx, writer, event)
         }
-    }
-}
-
-impl<S, N> DynamicFormatter<S, N>
-where
-    S: Subscriber + for<'a> LookupSpan<'a>,
-    N: for<'a> FormatFields<'a> + 'static,
-{
-    pub fn new() -> Self {
-        let default = Box::new(tracing_subscriber::fmt::format::Format::default());
-        let dim = Box::new(MyFormat {});
-        Self { default, dim }
     }
 }
 
