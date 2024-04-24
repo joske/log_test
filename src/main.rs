@@ -47,11 +47,11 @@ where
         writer: Writer<'_>,
         event: &Event<'_>,
     ) -> std::fmt::Result {
-        let default = tracing_subscriber::fmt::format::Format::default();
-        let dim = MyFormat::new();
         if DIM_FORMAT.load(Ordering::Relaxed) {
+            let dim = MyFormat::new();
             dim.format_event(ctx, writer, event)
         } else {
+            let default = tracing_subscriber::fmt::format::Format::default();
             default.format_event(ctx, writer, event)
         }
     }
