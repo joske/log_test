@@ -69,6 +69,7 @@ where
         mut writer: Writer<'_>,
         event: &Event<'_>,
     ) -> std::fmt::Result {
+        // set the DIM style
         if writer.has_ansi_escapes() {
             write!(writer, "\x1b[2m")?;
         }
@@ -87,9 +88,14 @@ where
         };
         write!(writer, "{}", fmt_level)?;
 
-        write!(writer, "{}: ", meta.target(),)?;
+        write!(writer, "{}: ", meta.target())?;
 
         ctx.format_fields(writer.by_ref(), event)?;
+
+        // reset the style
+        if writer.has_ansi_escapes() {
+            write!(writer, "\x1b[0m")?;
+        }
         writeln!(writer)
     }
 }
