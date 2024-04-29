@@ -1,25 +1,26 @@
-use std::{
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
-    time::SystemTime,
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
 };
 
-use chrono::{DateTime, Utc};
+use time::{
+    format_description::{self, BorrowedFormatItem},
+    OffsetDateTime,
+};
 use tracing::{Event, Subscriber};
 use tracing_subscriber::{
     fmt::{format::Writer, FmtContext, FormatEvent, FormatFields},
     registry::LookupSpan,
 };
 
-pub struct DynamicFormatter {
-    dim_format: DimFormat,
+/// A dynamic formatter that can switch between the default formatter and the DIM style.
+pub struct DynamicFormatter<'b> {
+    dim_format: DimFormat<'b>,
     default_format: tracing_subscriber::fmt::format::Format,
     dim: Arc<AtomicBool>,
 }
 
-impl<S, N> FormatEvent<S, N> for DynamicFormatter
+impl<'b, S, N> FormatEvent<S, N> for DynamicFormatter<'b>
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
     N: for<'a> FormatFields<'a> + 'static,
@@ -38,7 +39,7 @@ where
     }
 }
 
-impl DynamicFormatter {
+impl<'b> DynamicFormatter<'b> {
     pub fn new(dim: Arc<AtomicBool>) -> Self {
         let dim_format = DimFormat::new();
         let default_format = tracing_subscriber::fmt::format::Format::default();
@@ -50,15 +51,26 @@ impl DynamicFormatter {
     }
 }
 
-struct DimFormat {}
+/// A custom format for the DIM style.
+/// This formatter is quite basic and does not support all the features of the default formatter.
+/// It does support all the default fields of the default formatter.
+struct DimFormat<'b> {
+    // The lifetime annotation is needed because of the `time` crate that is used to format the
+    // timestamp.
+    fmt: Vec<BorrowedFormatItem<'b>>,
+}
 
-impl DimFormat {
+impl<'b> DimFormat<'b> {
     fn new() -> Self {
-        Self {}
+        let fmt = format_description::parse(
+            "[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond digits:6]Z",
+        )
+        .expect("failed to set timestampt format");
+        Self { fmt }
     }
 }
 
-impl<S, N> FormatEvent<S, N> for DimFormat
+impl<'b, S, N> FormatEvent<S, N> for DimFormat<'b>
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
     N: for<'a> FormatFields<'a> + 'static,
@@ -74,9 +86,12 @@ where
             write!(writer, "\x1b[2m")?;
         }
 
-        let system_time = SystemTime::now();
-        let date_time: DateTime<Utc> = system_time.into();
-        write!(writer, "{}  ", date_time.format("%Y-%m-%dT%H:%M:%S%.6fZ"))?;
+        let date_time = OffsetDateTime::now_utc();
+        write!(
+            writer,
+            "{}  ",
+            date_time.format(&self.fmt).map_err(|_| std::fmt::Error)?
+        )?;
 
         let meta = event.metadata();
         let fmt_level = match *meta.level() {

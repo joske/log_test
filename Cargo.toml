@@ -10,4 +10,4 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 crossterm = "0.27"
 tracing = "0.1"
 lazy_static = "1.4"
-chrono = "0.4"
+time = { version = "0.3", features = ["formatting"] }
