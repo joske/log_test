@@ -4,7 +4,7 @@ use std::sync::{
 };
 
 use time::{
-    format_description::{self, BorrowedFormatItem},
+    format_description::{self, OwnedFormatItem},
     OffsetDateTime,
 };
 use tracing::{Event, Subscriber};
@@ -14,13 +14,13 @@ use tracing_subscriber::{
 };
 
 /// A dynamic formatter that can switch between the default formatter and the DIM style.
-pub struct DynamicFormatter<'b> {
-    dim_format: DimFormat<'b>,
+pub struct DynamicFormatter {
+    dim_format: DimFormat,
     default_format: tracing_subscriber::fmt::format::Format,
     dim: Arc<AtomicBool>,
 }
 
-impl<'b, S, N> FormatEvent<S, N> for DynamicFormatter<'b>
+impl<S, N> FormatEvent<S, N> for DynamicFormatter
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
     N: for<'a> FormatFields<'a> + 'static,
@@ -39,7 +39,7 @@ where
     }
 }
 
-impl<'b> DynamicFormatter<'b> {
+impl DynamicFormatter {
     pub fn new(dim: Arc<AtomicBool>) -> Self {
         let dim_format = DimFormat::new();
         let default_format = tracing_subscriber::fmt::format::Format::default();
@@ -54,15 +54,13 @@ impl<'b> DynamicFormatter<'b> {
 /// A custom format for the DIM style.
 /// This formatter is quite basic and does not support all the features of the default formatter.
 /// It does support all the default fields of the default formatter.
-struct DimFormat<'b> {
-    // The lifetime annotation is needed because of the `time` crate that is used to format the
-    // timestamp.
-    fmt: Vec<BorrowedFormatItem<'b>>,
+struct DimFormat {
+    fmt: OwnedFormatItem,
 }
 
-impl<'b> DimFormat<'b> {
+impl DimFormat {
     fn new() -> Self {
-        let fmt = format_description::parse(
+        let fmt = format_description::parse_owned::<2>(
             "[year]-[month]-[day]T[hour]:[minute]:[second].[subsecond digits:6]Z",
         )
         .expect("failed to set timestampt format");
@@ -70,7 +68,7 @@ impl<'b> DimFormat<'b> {
     }
 }
 
-impl<'b, S, N> FormatEvent<S, N> for DimFormat<'b>
+impl<S, N> FormatEvent<S, N> for DimFormat
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
     N: for<'a> FormatFields<'a> + 'static,
